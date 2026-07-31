@@ -12,11 +12,9 @@ export default async function CartaSlugPage({ params }: Props) {
   const restaurant = await db.query.restaurants.findFirst({
     where: and(eq(restaurants.slug, slug), eq(restaurants.activo, true)),
   });
-
   if (!restaurant) return notFound();
 
   const ahora = new Date();
-
   const [menu, promos] = await Promise.all([
     db.query.categorias.findMany({
       where: and(eq(categorias.restaurantId, restaurant.id), eq(categorias.activa, true)),
@@ -42,12 +40,11 @@ export default async function CartaSlugPage({ params }: Props) {
   return (
     <CartaClient
       restaurant={{
-        nombre:     restaurant.nombre,
-        ciudad:     restaurant.ciudad,
-        color:      restaurant.color ?? "#E85D04",
-        logoUrl:    restaurant.logoUrl,
-        notasMenu:  restaurant.notasMenu,
-        notaMenuEn: (restaurant as Record<string, unknown>).notaMenuEn as string | null ?? null,
+        nombre:    restaurant.nombre,
+        ciudad:    restaurant.ciudad,
+        color:     restaurant.color ?? "#E85D04",
+        logoUrl:   restaurant.logoUrl,
+        notasMenu: restaurant.notasMenu,
       }}
       menu={menu}
       promos={promos}

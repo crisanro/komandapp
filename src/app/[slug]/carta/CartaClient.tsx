@@ -1,17 +1,16 @@
 "use client";
-
 import { useState, useEffect, useRef } from "react";
 
 type MenuItem  = {
-  id: string; nombre: string; nombreEn: string | null;
-  descripcion: string | null; descripcionEn: string | null;
+  id: string; nombre: string; nombreEn?: string | null;
+  descripcion: string | null; descripcionEn?: string | null;
   precio: string; imagenUrl: string | null; tags: string[] | null; agotado: boolean;
 };
-type Categoria = { id: string; nombre: string; nombreEn: string | null; items: MenuItem[] };
+type Categoria = { id: string; nombre: string; nombreEn?: string | null; items: MenuItem[] };
 type Promo     = { id: string; titulo: string; descripcion: string | null; emoji: string | null };
 type Restaurant = {
   nombre: string; ciudad: string | null; color: string;
-  logoUrl: string | null; notasMenu: string | null; notaMenuEn: string | null;
+  logoUrl: string | null; notasMenu: string | null; notaMenuEn?: string | null;
 };
 
 const TAG_LABEL: Record<string, string> = {
@@ -24,16 +23,14 @@ export default function CartaClient({ restaurant, menu, promos }: {
   menu:       Categoria[];
   promos:     Promo[];
 }) {
-  const [catActiva, setCatActiva]   = useState(menu[0]?.id ?? "");
-  const [idioma, setIdioma]         = useState<"es" | "en">("es");
+  const [catActiva, setCatActiva] = useState(menu[0]?.id ?? "");
+  const [idioma, setIdioma]       = useState<"es" | "en">("es");
   const catRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const color = restaurant.color;
 
-  // Helpers de traducción
-  const t = (es: string, en: string | null) => idioma === "en" && en ? en : es;
+  const t = (es: string, en?: string | null) => idioma === "en" && en ? en : es;
   const tieneIngles = menu.some(c => c.nombreEn || c.items.some(i => i.nombreEn));
 
-  // Observer para actualizar la categoría activa al hacer scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -45,19 +42,14 @@ export default function CartaClient({ restaurant, menu, promos }: {
       },
       { rootMargin: "-30% 0px -60% 0px", threshold: 0 }
     );
-
-    Object.values(catRefs.current).forEach(ref => {
-      if (ref) observer.observe(ref);
-    });
-
+    Object.values(catRefs.current).forEach(ref => { if (ref) observer.observe(ref); });
     return () => observer.disconnect();
   }, [menu]);
 
   function scrollTocat(catId: string) {
     const el = catRefs.current[catId];
     if (el) {
-      const offset = 80;
-      const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      const top = el.getBoundingClientRect().top + window.scrollY - 80;
       window.scrollTo({ top, behavior: "smooth" });
     }
     setCatActiva(catId);
@@ -65,7 +57,6 @@ export default function CartaClient({ restaurant, menu, promos }: {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-
       {/* Header */}
       <div className="relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${color}dd, ${color}88)` }}>
         <div className="absolute inset-0 bg-black/30" />
@@ -96,7 +87,7 @@ export default function CartaClient({ restaurant, menu, promos }: {
         </div>
       </div>
 
-      {/* Card "pide al mesero" */}
+      {/* Card pide al mesero */}
       <div className="mx-4 -mt-5 relative z-10">
         <div className="bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-xl">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
@@ -131,15 +122,12 @@ export default function CartaClient({ restaurant, menu, promos }: {
 
       {/* Layout principal */}
       <div className="flex mt-6">
-
-        {/* Sidebar categorías — desktop */}
+        {/* Sidebar — desktop */}
         <aside className="hidden md:block w-48 shrink-0 sticky top-4 self-start ml-4 space-y-1">
           {menu.map(cat => (
             <button key={cat.id} onClick={() => scrollTocat(cat.id)}
               className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                catActiva === cat.id
-                  ? "text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+                catActiva === cat.id ? "text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"
               }`}
               style={catActiva === cat.id ? { backgroundColor: color, color: "white" } : {}}>
               {t(cat.nombre, cat.nombreEn)}
@@ -147,10 +135,8 @@ export default function CartaClient({ restaurant, menu, promos }: {
           ))}
         </aside>
 
-        {/* Contenido */}
         <div className="flex-1 min-w-0">
-
-          {/* Tabs categorías — mobile */}
+          {/* Tabs — mobile */}
           <div className="md:hidden sticky top-0 z-20 bg-gray-950 border-b border-gray-800 px-4 pb-0 pt-2">
             <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
               {menu.map(cat => (
@@ -165,7 +151,7 @@ export default function CartaClient({ restaurant, menu, promos }: {
             </div>
           </div>
 
-          {/* Ítems por categoría */}
+          {/* Ítems */}
           <div className="px-4 pb-20">
             {menu.length === 0 ? (
               <div className="text-center py-20 text-gray-600">
@@ -174,21 +160,18 @@ export default function CartaClient({ restaurant, menu, promos }: {
               </div>
             ) : (
               menu.map(cat => (
-                <div
-                  key={cat.id}
-                  id={`cat-${cat.id}`}
+                <div key={cat.id} id={`cat-${cat.id}`}
                   ref={el => { catRefs.current[cat.id] = el; }}
-                  className="mb-8 scroll-mt-20"
-                >
-                  <h2 className="text-lg font-bold text-white mb-4 pt-4">{t(cat.nombre, cat.nombreEn)}</h2>
+                  className="mb-8 scroll-mt-20">
+                  <h2 className="text-lg font-bold text-white mb-4 pt-4">
+                    {t(cat.nombre, cat.nombreEn)}
+                  </h2>
                   <div className="space-y-3">
                     {cat.items.map(item => (
                       <div key={item.id}
                         className={`bg-gray-900 border rounded-2xl overflow-hidden flex gap-3 p-4 transition-opacity ${
                           item.agotado ? "opacity-40 border-gray-800" : "border-gray-800 hover:border-gray-600"
                         }`}>
-
-                        {/* Imagen */}
                         {item.imagenUrl ? (
                           <img src={item.imagenUrl} alt={item.nombre}
                             className="w-20 h-20 rounded-xl object-cover shrink-0" />
@@ -197,8 +180,6 @@ export default function CartaClient({ restaurant, menu, promos }: {
                             🍽
                           </div>
                         )}
-
-                        {/* Info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-sm font-semibold text-white leading-tight">
@@ -208,14 +189,11 @@ export default function CartaClient({ restaurant, menu, promos }: {
                               ${parseFloat(item.precio).toFixed(2)}
                             </span>
                           </div>
-
                           {(item.descripcion || item.descripcionEn) && (
                             <p className="text-xs text-gray-400 mt-1 leading-relaxed line-clamp-2">
                               {t(item.descripcion ?? "", item.descripcionEn)}
                             </p>
                           )}
-
-                          {/* Tags */}
                           {(item.tags ?? []).length > 0 && (
                             <div className="flex gap-1.5 flex-wrap mt-2">
                               {(item.tags ?? []).map(tag => (
@@ -225,7 +203,6 @@ export default function CartaClient({ restaurant, menu, promos }: {
                               ))}
                             </div>
                           )}
-
                           {item.agotado && (
                             <span className="inline-block mt-2 text-xs bg-red-900/50 text-red-400 px-2 py-0.5 rounded-full">
                               Agotado
@@ -238,16 +215,12 @@ export default function CartaClient({ restaurant, menu, promos }: {
                 </div>
               ))
             )}
-
-            {/* Nota al pie */}
             {restaurant.notasMenu && (
               <p className="text-xs text-gray-600 text-center pt-4 pb-8">{restaurant.notasMenu}</p>
             )}
           </div>
-
         </div>
       </div>
-
     </div>
   );
 }
