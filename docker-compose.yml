@@ -1,0 +1,15 @@
+services:
+  mesa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mesa_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - red_infraestructura
+
+networks:
+  red_infraestructura:
+    external: true
