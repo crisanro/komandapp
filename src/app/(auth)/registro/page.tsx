@@ -126,7 +126,7 @@ export default function RegistroPage() {
               onSuccess={() => setTurnstileOk(true)}
               onError={() => setTurnstileOk(false)}
               onExpire={() => setTurnstileOk(false)}
-              options={{ theme: "dark", size: "invisible" }}
+              options={{ theme: "auto", size: "normal" }}
             />
 
             <button

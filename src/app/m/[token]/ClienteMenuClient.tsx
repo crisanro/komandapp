@@ -22,8 +22,8 @@ const TAG_LABEL: Record<string, string> = {
 const ESTADO_LABEL: Record<string, { label: string; color: string }> = {
   PENDIENTE:      { label: "Pendiente",       color: "text-gray-500" },
   EN_PREPARACION: { label: "En preparación",  color: "text-blue-400" },
-  LISTO:          { label: "✅ Listo",         color: "text-green-400" },
-  ENTREGADO:      { label: "Entregado",        color: "text-gray-600" },
+  LISTO:          { label: "🔔 Listo",         color: "text-green-400" },
+  ENTREGADO:      { label: "✓ Entregado",        color: "text-gray-600" },
 };
 
 export default function ClienteMenuClient({

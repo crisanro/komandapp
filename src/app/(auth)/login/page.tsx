@@ -86,7 +86,7 @@ export default function LoginPage() {
               onSuccess={() => setTurnstileOk(true)}
               onError={() => setTurnstileOk(false)}
               onExpire={() => setTurnstileOk(false)}
-              options={{ theme: "auto", size: "invisible" }}
+              options={{ theme: "auto", size: "normal" }}
             />
 
             <button
