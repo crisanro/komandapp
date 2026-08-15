@@ -70,14 +70,6 @@ export async function registrarRestaurante(formData: FormData) {
 
 export async function loginAdmin(formData: FormData) {
   const reqHeaders = await headers();
-
-    // Temporal — diagnóstico
-  console.log("IP headers:", {
-    cf:        reqHeaders.get("cf-connecting-ip"),
-    forwarded: reqHeaders.get("x-forwarded-for"),
-    real:      reqHeaders.get("x-real-ip"),
-  });
-  
   const ip = getIP(reqHeaders);
 
   const limite = await consumirLimite(limiterLoginAdmin, ip);

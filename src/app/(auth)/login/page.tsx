@@ -53,7 +53,6 @@ export default function LoginAdminPage() {
               <input name="password" type="password" required autoComplete="current-password"
                 placeholder="••••••••" className="input" />
             </div>
-            <p style={{color:"red"}}>{process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "VACÍO O UNDEFINED"}</p>
             <Turnstile
               siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
               onSuccess={() => setTurnstileOk(true)}
