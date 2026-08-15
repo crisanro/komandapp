@@ -1,5 +1,6 @@
 "use server";
-import { stripe, PLANES } from "@/lib/stripe";
+
+import { getStripe, PLANES } from "@/lib/stripe";
 import { db } from "@/db";
 import { restaurants, admins } from "@/db/schema";
 import { getAdminSession } from "@/lib/auth";
@@ -7,39 +8,44 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 export async function crearCheckoutSession(plan: "BASICO" | "PRO"): Promise<void> {
+  const stripe = getStripe();
   const session = await getAdminSession();
   if (!session) return;
 
   const restaurant = await db.query.restaurants.findFirst({
     where: eq(restaurants.id, session.restaurantId),
     columns: {
-      id: true, nombre: true, stripeCustomerId: true,
-      plan: true, planStatus: true,
+      id: true,
+      nombre: true,
+      stripeCustomerId: true,
+      plan: true,
+      planStatus: true,
     },
   });
-  if (!restaurant) return; // ← sin { error }
+  if (!restaurant) return;
 
   const admin = await db.query.admins.findFirst({
-    where:   eq(admins.id, session.adminId),
+    where: eq(admins.id, session.adminId),
     columns: { email: true },
   });
 
   let customerId = restaurant.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
-      email:    admin?.email,
-      name:     restaurant.nombre,
+      email: admin?.email,
+      name: restaurant.nombre,
       metadata: { restaurantId: restaurant.id },
     });
     customerId = customer.id;
-    await db.update(restaurants)
+    await db
+      .update(restaurants)
       .set({ stripeCustomerId: customerId })
       .where(eq(restaurants.id, restaurant.id));
   }
 
   const checkoutSession = await stripe.checkout.sessions.create({
-    customer:             customerId,
-    mode:                 "subscription",
+    customer: customerId,
+    mode: "subscription",
     payment_method_types: ["card"],
     line_items: [{ price: PLANES[plan].priceId, quantity: 1 }],
     subscription_data: {
@@ -47,7 +53,7 @@ export async function crearCheckoutSession(plan: "BASICO" | "PRO"): Promise<void
       metadata: { restaurantId: restaurant.id, plan },
     },
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?suscripcion=ok`,
-    cancel_url:  `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?suscripcion=cancelada`,
+    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?suscripcion=cancelada`,
     metadata: { restaurantId: restaurant.id, plan },
   });
 
@@ -55,17 +61,18 @@ export async function crearCheckoutSession(plan: "BASICO" | "PRO"): Promise<void
 }
 
 export async function abrirPortalCliente(): Promise<void> {
+  const stripe = getStripe();
   const session = await getAdminSession();
   if (!session) return;
 
   const restaurant = await db.query.restaurants.findFirst({
-    where:   eq(restaurants.id, session.restaurantId),
+    where: eq(restaurants.id, session.restaurantId),
     columns: { stripeCustomerId: true },
   });
-  if (!restaurant?.stripeCustomerId) return; // ← sin { error }
+  if (!restaurant?.stripeCustomerId) return;
 
   const portalSession = await stripe.billingPortal.sessions.create({
-    customer:   restaurant.stripeCustomerId,
+    customer: restaurant.stripeCustomerId,
     return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
   });
 
