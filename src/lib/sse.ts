@@ -58,8 +58,12 @@ export function removeClient(client: SSEClient) {
 
 export function broadcast(restaurantId: string, event: string, data: unknown) {
   const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  console.log(`[SSE] broadcast → sse:${restaurantId} | ${event}`);
-  redis.publish(`sse:${restaurantId}`, message);
+  console.log(`[SSE] broadcast → sse:${restaurantId} | ${event} | Redis status: ${redis.status}`);
+  redis.publish(`sse:${restaurantId}`, message).then(count => {
+    console.log(`[SSE] publish result: ${count} subscribers recibieron`);
+  }).catch(err => {
+    console.error(`[SSE] publish error:`, err.message);
+  });
 }
 
 export function sendPing(controller: ReadableStreamDefaultController) {
