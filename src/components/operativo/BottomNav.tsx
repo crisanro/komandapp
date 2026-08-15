@@ -1,5 +1,4 @@
 "use client";
-
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -26,7 +25,7 @@ export default function BottomNav({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex"
+    <nav className="sticky bottom-0 z-40 flex"  // ← fixed → sticky, quitar left/right
       style={{
         background:    "var(--surface)",
         borderTop:     "1px solid var(--border)",

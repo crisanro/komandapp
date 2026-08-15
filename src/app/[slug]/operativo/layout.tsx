@@ -5,7 +5,6 @@ import PushInit from "@/components/operativo/PushInit";
 import BottomNav from "@/components/operativo/BottomNav";
 import { Metadata } from "next";
 
-// 1. Exportamos generateMetadata para inyectar el manifest dinámico
 export async function generateMetadata({
   params,
 }: {
@@ -17,7 +16,6 @@ export async function generateMetadata({
   };
 }
 
-// 2. Tu Layout original
 export default async function OperativoLayout({
   children,
   params,
@@ -27,7 +25,6 @@ export default async function OperativoLayout({
 }) {
   const { slug } = await params;
   const session  = await getOperativoSession();
-
   if (!session) redirect(`/${slug}/login`);
   if (session.restaurantSlug !== slug) redirect(`/${slug}/login`);
 
@@ -36,7 +33,6 @@ export default async function OperativoLayout({
     p.puedeAbrirMesas || p.puedeTomarPedidos || p.puedeVerTodasLasMesas ||
     p.puedeCobrar || p.puedeCerrarCuenta || p.puedeCuadrarCaja ||
     (session.estaciones?.length > 0);
-
   if (!tieneAcceso) redirect(`/${slug}/login`);
 
   const vistas: { key: "mesas" | "kds" | "caja"; label: string; icon: string }[] = [];
@@ -50,31 +46,18 @@ export default async function OperativoLayout({
   return (
     <>
       <PushInit userId={session.userId} />
-
-      {/* Botón volver al panel — solo si es admin en modo operativo */}
       {session.esAdmin && (
         <form action={volverAlPanel}
           style={{ position: "fixed", top: "1rem", right: "1rem", zIndex: 50 }}>
-          <button
-            type="submit"
-            className="btn btn-sm"
-            style={{
-              background: "var(--surface)",
-              border:     "1px solid var(--border)",
-              color:      "var(--text-primary)",
-              boxShadow:  "var(--shadow-md)",
-            }}
-          >
+          <button type="submit" className="btn btn-sm"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
             ← Panel admin
           </button>
         </form>
       )}
 
-      <div className="flex flex-col min-h-screen" style={{ background: "var(--background)" }}>
-        <main
-          className="flex-1 overflow-y-auto"
-          style={{ paddingBottom: vistas.length > 1 ? "4rem" : 0 }}
-        >
+      <div className="flex flex-col h-screen" style={{ background: "var(--background)" }}>
+        <main className="flex-1 overflow-y-auto min-h-0">
           {children}
         </main>
         {vistas.length > 1 && (

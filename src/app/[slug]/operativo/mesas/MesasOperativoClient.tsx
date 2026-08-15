@@ -6,6 +6,7 @@ import { abrirMesa } from "@/actions/sesiones";
 import { logout } from "@/actions/auth";
 import CambiarVista from "@/components/operativo/CambiarVista";
 import BannerPromociones from "@/components/shared/BannerPromociones";
+import QRSesion from "@/components/mesero/QRSesion"; // ← Agregado
 import type { PermisosUser } from "@/lib/auth";
 
 type Promo  = { id: string; titulo: string; descripcion: string | null; emoji: string | null };
@@ -13,7 +14,7 @@ type Item   = {
   id: string; 
   estado: string; 
   cantidad: number;
-  precioUnitario?: string; // ← Agregado
+  precioUnitario?: string;
   menuItem?: { nombre: string } | null; 
 };
 type Pedido = { id: string; estado: string; items: Item[] };
@@ -48,7 +49,8 @@ export default function MesasOperativoClient({
   const [mesas,    setMesas]   = useState<Mesa[]>(mesasIniciales);
   const [abriendo, setAbriendo] = useState<string | null>(null);
   const [cuentasSolicitadas, setCuentas] = useState<Set<string>>(new Set());
-  const [mesaModal, setMesaModal] = useState<Mesa | null>(null); // ← Estado del modal
+  const [mesaModal, setMesaModal] = useState<Mesa | null>(null);
+  const [qrModal, setQrModal] = useState<{ token: string; mesaNombre: string } | null>(null); // ← Agregado
   const router = useRouter();
 
   // ── SSE handlers ──────────────────────────────────────
@@ -181,13 +183,14 @@ export default function MesasOperativoClient({
   }
 
   // ── Mesas ──────────────────────────────────────────────
-  async function handleAbrirMesa(mesaId: string) {
+  async function handleAbrirMesa(mesaId: string, nombreCliente?: string) {
     setAbriendo(mesaId);
-    const result = await abrirMesa(mesaId);
+    const result = await abrirMesa(mesaId, nombreCliente);
     setAbriendo(null);
     if (result?.error) { alert(result.error); return; }
     if (result?.ok && result.token) {
-      router.push(`/${restaurantSlug}/operativo/mesa/${result.token}`);
+      const mesa = mesas.find(m => m.id === mesaId);
+      setQrModal({ token: result.token, mesaNombre: mesa?.nombre ?? "Mesa" });
     }
   }
 
@@ -296,7 +299,7 @@ export default function MesasOperativoClient({
                   <button key={mesa.id}
                     onClick={() => {
                       if (ocupada) {
-                        setMesaModal(mesa); // ← Abre el modal con las cuentas de la mesa
+                        setMesaModal(mesa);
                       } else {
                         handleAbrirMesa(mesa.id);
                       }
@@ -419,6 +422,16 @@ export default function MesasOperativoClient({
             )}
           </div>
         </div>
+      )}
+
+      {/* Modal QR */}
+      {qrModal && (
+        <QRSesion
+          token={qrModal.token}
+          slug={restaurantSlug}
+          mesaNombre={qrModal.mesaNombre}
+          onCerrar={() => setQrModal(null)}
+        />
       )}
     </div>
   );
