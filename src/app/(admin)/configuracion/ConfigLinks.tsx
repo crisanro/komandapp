@@ -12,7 +12,7 @@ export default function ConfigLinks({ slug }: { slug: string }) {
   }, []);
 
   const links = [
-    { label: "Carta pública",     url: `${base}/${slug}/menu` },
+    { label: "Carta pública",     url: `${base}/${slug}` },
     { label: "Acceso del equipo", url: `${base}/${slug}/login` },
   ];
 
