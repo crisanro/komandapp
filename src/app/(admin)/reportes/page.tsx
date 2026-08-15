@@ -1,11 +1,11 @@
 import { getAdminSession } from "@/lib/auth";
 import { db } from "@/db";
-import { sesiones, itemsPedido, pedidos } from "@/db/schema";
+import { sesiones, itemsPedido, pedidos, reseñas } from "@/db/schema";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import Link from "next/link";
 
 async function getReporteData(restaurantId: string, desde: Date, hasta: Date) {
-  const [sesionesData, itemsData, pedidosData] = await Promise.all([
+  const [sesionesData, itemsData, pedidosData, resenasData] = await Promise.all([
     db.query.sesiones.findMany({
       where: and(
         eq(sesiones.restaurantId, restaurantId),
@@ -32,10 +32,21 @@ async function getReporteData(restaurantId: string, desde: Date, hasta: Date) {
         eq(pedidos.estado, "ENTREGADO"),
       ),
     }),
+    db.query.reseñas.findMany({
+      where: and(
+        eq(reseñas.restaurantId, restaurantId),
+        gte(reseñas.creadoEn, desde),
+        lte(reseñas.creadoEn, hasta),
+      ),
+    }),
   ]);
 
   const ventaTotal     = sesionesData.reduce((acc, s) => acc + parseFloat(s.totalFinal ?? "0"), 0);
   const ticketPromedio = sesionesData.length > 0 ? ventaTotal / sesionesData.length : 0;
+
+  const promedioResenas = resenasData.length > 0
+    ? resenasData.reduce((acc, r) => acc + r.calificacion, 0) / resenasData.length
+    : 0;
 
   // Ranking platos
   const rankingMap = new Map<string, { nombre: string; cantidad: number; total: number }>();
@@ -71,7 +82,9 @@ async function getReporteData(restaurantId: string, desde: Date, hasta: Date) {
   }
 
   return {
-    ventaTotal, ticketPromedio,
+    ventaTotal,
+    ticketPromedio,
+    promedioResenas,
     totalCuentas:    sesionesData.length,
     totalItems:      itemsData.reduce((acc, i) => acc + i.cantidad, 0),
     rankingPlatos,
@@ -134,11 +147,12 @@ export default async function ReportesPage({
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <KpiCard label="Ventas totales"   value={`$${data.ventaTotal.toFixed(2)}`}    accentColor="var(--accent)"          />
-        <KpiCard label="Cuentas cerradas" value={String(data.totalCuentas)}            accentColor="var(--color-info)"      />
-        <KpiCard label="Ticket promedio"  value={`$${data.ticketPromedio.toFixed(2)}`} accentColor="var(--color-success)"   />
-        <KpiCard label="Ítems vendidos"   value={String(data.totalItems)}              accentColor="var(--color-warning)"   />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <KpiCard label="Ventas totales"   value={`$${data.ventaTotal.toFixed(2)}`}                    accentColor="var(--accent)"        />
+        <KpiCard label="Cuentas cerradas" value={String(data.totalCuentas)}                           accentColor="var(--color-info)"     />
+        <KpiCard label="Ticket promedio"  value={`$${data.ticketPromedio.toFixed(2)}`}                  accentColor="var(--color-success)"  />
+        <KpiCard label="Ítems vendidos"   value={String(data.totalItems)}                             accentColor="var(--color-warning)"  />
+        <KpiCard label="Satisfacción"     value={data.promedioResenas > 0 ? `${data.promedioResenas.toFixed(1)} ⭐` : "Sin datos"} accentColor="var(--color-warning)" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

@@ -1,3 +1,4 @@
+//src/app/(admin)/equipo/page.tsx
 import { getAdminSession } from "@/lib/auth";
 import { db } from "@/db";
 import { users, estaciones } from "@/db/schema";

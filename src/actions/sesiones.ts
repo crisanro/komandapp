@@ -149,3 +149,31 @@ export async function getSesionByToken(token: string) {
 
   return sesion ?? null;
 }
+
+export async function getSesionDetalle(sesionId: string) {
+  const session = await getSession();
+  if (!session) return null;
+
+  const sesion = await db.query.sesiones.findFirst({
+    where: and(
+      eq(sesiones.id, sesionId),
+      eq(sesiones.restaurantId, session.restaurantId)
+    ),
+    with: {
+      mesa: true,
+      abiertaPor: true,
+      pedidos: {
+        orderBy: (p, { asc }) => [asc(p.creadoEn)],
+        with: {
+          items: {
+            with: { menuItem: true },
+          },
+        },
+      },
+      pagos:      true,
+      descuentos: true,
+    },
+  });
+
+  return sesion ?? null;
+}

@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { notificarPedidoListo } from "@/actions/push";
+import { notificarPedidoListo, notificarPedidoNuevo } from "@/actions/push";
 import { pedidos, itemsPedido, menuItems, sesiones } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import { broadcast } from "@/lib/sse";
@@ -28,7 +28,7 @@ export async function crearPedido(sesionId: string, items: ItemCarrito[], notas?
 
   const sesion = await db.query.sesiones.findFirst({
     where: and(eq(sesiones.id, sesionId), eq(sesiones.restaurantId, restaurantId)),
-    with: { mesa: true },
+    with:  { mesa: true },
   });
   if (!sesion || sesion.estado !== "ACTIVA") return { error: "Sesión no válida" };
 
@@ -38,10 +38,10 @@ export async function crearPedido(sesionId: string, items: ItemCarrito[], notas?
     .where(eq(pedidos.sesionId, sesionId));
 
   const numeroPedido = totalPedidos + 1;
-  const pedidoId = createId();
+  const pedidoId     = createId();
 
   await db.insert(pedidos).values({
-    id: pedidoId,
+    id:              pedidoId,
     restaurantId,
     sesionId,
     mesaId:          sesion.mesaId,
@@ -58,13 +58,12 @@ export async function crearPedido(sesionId: string, items: ItemCarrito[], notas?
   for (const item of items) {
     const menuItem = await db.query.menuItems.findFirst({
       where: and(eq(menuItems.id, item.menuItemId), eq(menuItems.restaurantId, restaurantId)),
-      with: { categoria: true },
+      with:  { categoria: true },
     });
     if (!menuItem) continue;
     if (menuItem.agotado) return { error: `"${menuItem.nombre}" está agotado` };
 
     const estacionId    = menuItem.estacionId ?? menuItem.categoria?.estacionId ?? null;
-    // Sin estación = mesero lo despacha directo, nace en LISTO
     const estadoInicial = estacionId ? "EN_COLA" : "LISTO";
     const itemId        = createId();
 
@@ -92,7 +91,7 @@ export async function crearPedido(sesionId: string, items: ItemCarrito[], notas?
       estado:     estadoInicial,
     });
 
-    // Sin estación → broadcast inmediato para /inicio del mesero
+    // Sin estación → broadcast inmediato LISTO para mesero
     if (!estacionId) {
       broadcast(restaurantId, "item:update", {
         itemId,
@@ -108,6 +107,7 @@ export async function crearPedido(sesionId: string, items: ItemCarrito[], notas?
     }
   }
 
+  // Broadcast general del pedido nuevo
   broadcast(restaurantId, "pedido:nuevo", {
     pedidoId,
     sesionId,
@@ -118,6 +118,16 @@ export async function crearPedido(sesionId: string, items: ItemCarrito[], notas?
     notas,
     creadoEn:   new Date().toISOString(),
   });
+
+  // Push a cocina solo para items que van a estación
+  const itemsConEstacion = itemsCreados.filter(i => i.estacionId);
+  if (itemsConEstacion.length > 0) {
+    await notificarPedidoNuevo({
+      restaurantId,
+      mesaNombre:    sesion.mesa?.nombre ?? "Mesa",
+      cantidadItems: itemsConEstacion.length,
+    });
+  }
 
   revalidatePath("/mesas");
   revalidatePath("/dashboard");
@@ -134,13 +144,14 @@ export async function actualizarEstadoItem(
   const item = await db.query.itemsPedido.findFirst({
     where: and(eq(itemsPedido.id, itemId), eq(itemsPedido.restaurantId, session.restaurantId)),
     with: {
-      pedido:  { with: { mesa: true } },
+      pedido:   { with: { mesa: true } },
       menuItem: { columns: { nombre: true } },
     },
   });
   if (!item) return { error: "Ítem no encontrado" };
 
   const marcadoPorId = session.tipo === "operativo" ? session.userId : null;
+
   await db.update(itemsPedido)
     .set({ estado, marcadoPorId, actualizadoEn: new Date() })
     .where(eq(itemsPedido.id, itemId));
@@ -151,10 +162,12 @@ export async function actualizarEstadoItem(
       with:  { menuItem: true },
     });
     const todosListos = todosItems.every(i => i.id === itemId || i.estado === "LISTO");
+
     if (todosListos) {
       await db.update(pedidos)
         .set({ estado: "LISTO", listoEn: new Date(), actualizadoEn: new Date() })
         .where(eq(pedidos.id, item.pedidoId));
+
       await notificarPedidoListo({
         restaurantId: session.restaurantId,
         mesaNombre:   item.pedido?.mesa?.nombre ?? "Mesa",
@@ -193,7 +206,10 @@ export async function marcarPedidoEntregado(pedidoId: string) {
 
   await db.update(itemsPedido)
     .set({ estado: "ENTREGADO", actualizadoEn: new Date() })
-    .where(and(eq(itemsPedido.pedidoId, pedidoId), eq(itemsPedido.restaurantId, session.restaurantId)));
+    .where(and(
+      eq(itemsPedido.pedidoId, pedidoId),
+      eq(itemsPedido.restaurantId, session.restaurantId)
+    ));
 
   broadcast(session.restaurantId, "pedido:update", {
     pedidoId,
@@ -206,19 +222,20 @@ export async function marcarPedidoEntregado(pedidoId: string) {
   return { ok: true };
 }
 
-
 export async function cancelarItem(itemId: string) {
   const session = await getSession();
   if (!session) return { error: "No autorizado" };
 
   const item = await db.query.itemsPedido.findFirst({
     where: and(eq(itemsPedido.id, itemId), eq(itemsPedido.restaurantId, session.restaurantId)),
-    with: { pedido: { with: { mesa: true } } },
+    with:  { pedido: { with: { mesa: true } } },
   });
   if (!item) return { error: "Ítem no encontrado" };
+
   if (item.estado !== "EN_COLA" && !(item.estado === "LISTO" && !item.estacionId)) {
     return { error: "No se puede cancelar este ítem" };
   }
+
   await db.update(itemsPedido)
     .set({ estado: "CANCELADO", actualizadoEn: new Date() })
     .where(eq(itemsPedido.id, itemId));

@@ -3,6 +3,8 @@ import { db } from "@/db";
 import { restaurants, mesas, sesiones, pedidos } from "@/db/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import Link from "next/link";
+import TiempoTranscurrido from "@/components/admin/TiempoTranscurrido";
+import PlanBanner from "@/components/admin/PlanBanner";
 
 async function getDashboardData(restaurantId: string) {
   const hoy = new Date();
@@ -62,7 +64,16 @@ export default async function DashboardPage() {
 
   const [data, restaurant] = await Promise.all([
     getDashboardData(session.restaurantId),
-    db.query.restaurants.findFirst({ where: eq(restaurants.id, session.restaurantId) }),
+    db.query.restaurants.findFirst({
+      where: eq(restaurants.id, session.restaurantId),
+      columns: {
+        nombre: true,
+        plan: true,
+        planStatus: true,
+        trialEndsAt: true,
+        currentPeriodEndsAt: true,
+      },
+    }),
   ]);
 
   return (
@@ -79,6 +90,9 @@ export default async function DashboardPage() {
           })}
         </p>
       </div>
+
+      {/* Banner trial / plan */}
+      {restaurant && <PlanBanner restaurant={restaurant} />}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -211,14 +225,20 @@ export default async function DashboardPage() {
             {data.pedidosActivos.map((pedido) => (
               <div key={pedido.id} className="rounded-xl p-4"
                 style={{ background: "var(--accent-subtle)", border: "1px solid rgba(232,93,4,0.2)" }}>
+                
+                {/* Header de pedido con TiempoTranscurrido */}
                 <div className="flex justify-between mb-3">
                   <span className="font-semibold text-sm" style={{ color: "var(--accent)" }}>
                     {pedido.mesa?.nombre}
                   </span>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {new Date(pedido.creadoEn).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
+                  <div className="text-right">
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {new Date(pedido.creadoEn).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    <TiempoTranscurrido fecha={pedido.creadoEn} />
+                  </div>
                 </div>
+
                 <ul className="space-y-1">
                   {pedido.items.map((item) => (
                     <li key={item.id} className="text-sm flex gap-2">

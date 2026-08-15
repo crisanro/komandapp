@@ -13,6 +13,7 @@ export type SessionAdmin = {
   tipo:         "admin";
   adminId:      string;
   restaurantId: string;
+  restaurantSlug: string;
   nombre:       string;
   email:        string;
 };
@@ -21,10 +22,13 @@ export type SessionOperativo = {
   tipo:         "operativo";
   userId:       string;
   restaurantId: string;
+  restaurantSlug: string; 
   nombre:       string;
   vistaActiva:  "mesas" | "kds" | "caja";
   permisos:     PermisosUser;
-  estaciones:   string[]; // IDs de estaciones asignadas
+  estaciones:   string[]; 
+  esAdmin?:       boolean;
+  adminEmail?:  string;
 };
 
 export type SessionPayload = SessionAdmin | SessionOperativo;

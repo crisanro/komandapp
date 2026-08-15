@@ -1,20 +1,27 @@
 "use server";
-
 import { db } from "@/db";
-import { pushTokens, users } from "@/db/schema";
+import { pushTokens, users, restaurants } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import { sendPushToMany } from "@/lib/firebase-admin";
 import { createId } from "@paralleldrive/cuid2";
 import { eq, and } from "drizzle-orm";
 
+// ── Helper para obtener slug ──────────────────────────────
+async function getSlug(restaurantId: string): Promise<string> {
+  const r = await db.query.restaurants.findFirst({
+    where:   eq(restaurants.id, restaurantId),
+    columns: { slug: true },
+  });
+  return r?.slug ?? "";
+}
+
+// ── Guardar token ─────────────────────────────────────────
 export async function guardarPushToken(token: string) {
   const session = await getSession();
   if (!session || session.tipo !== "operativo") return;
-
   const existente = await db.query.pushTokens.findFirst({
     where: eq(pushTokens.token, token),
   });
-
   if (!existente) {
     await db.insert(pushTokens).values({
       id:           createId(),
@@ -30,6 +37,7 @@ export async function eliminarPushToken(token: string) {
   await db.delete(pushTokens).where(eq(pushTokens.token, token));
 }
 
+// ── Obtener tokens ────────────────────────────────────────
 export async function getTokensRestaurante(restaurantId: string): Promise<string[]> {
   const tokens = await db.query.pushTokens.findMany({
     where: eq(pushTokens.restaurantId, restaurantId),
@@ -45,14 +53,11 @@ export async function getTokensMeseros(restaurantId: string): Promise<string[]> 
       eq(users.activo, true),
     ),
   });
-
   const userIds = meseros.map(u => u.id);
   if (userIds.length === 0) return [];
-
   const tokens = await db.query.pushTokens.findMany({
     where: eq(pushTokens.restaurantId, restaurantId),
   });
-
   return tokens.filter(t => userIds.includes(t.userId)).map(t => t.token);
 }
 
@@ -64,17 +69,15 @@ export async function getTokensCajeros(restaurantId: string): Promise<string[]> 
       eq(users.activo, true),
     ),
   });
-
   const userIds = cajeros.map(u => u.id);
   if (userIds.length === 0) return [];
-
   const tokens = await db.query.pushTokens.findMany({
     where: eq(pushTokens.restaurantId, restaurantId),
   });
-
   return tokens.filter(t => userIds.includes(t.userId)).map(t => t.token);
 }
 
+// ── Notificaciones ────────────────────────────────────────
 export async function notificarPedidoListo({
   restaurantId, mesaNombre, items,
 }: {
@@ -82,17 +85,24 @@ export async function notificarPedidoListo({
   mesaNombre:   string;
   items:        string[];
 }) {
-  const tokens = await getTokensMeseros(restaurantId);
+  const [tokens, slug] = await Promise.all([
+    getTokensMeseros(restaurantId),
+    getSlug(restaurantId),
+  ]);
   if (tokens.length === 0) return;
 
   const itemsTexto = items.slice(0, 3).join(", ");
-  const mas = items.length > 3 ? ` y ${items.length - 3} más` : "";
+  const mas        = items.length > 3 ? ` y ${items.length - 3} más` : "";
 
   await sendPushToMany({
     tokens,
     title: `🔔 Pedido listo — ${mesaNombre}`,
     body:  `${itemsTexto}${mas}`,
-    data:  { tipo: "pedido_listo", restaurantId },
+    data:  {
+      tipo:         "pedido_listo",
+      restaurantId,
+      url:          `/${slug}/operativo/mesas`,
+    },
   });
 }
 
@@ -103,11 +113,11 @@ export async function notificarCuentaSolicitada({
   mesaNombre:   string;
   total:        string;
 }) {
-  const [tokensMeseros, tokensCajeros] = await Promise.all([
+  const [tokensMeseros, tokensCajeros, slug] = await Promise.all([
     getTokensMeseros(restaurantId),
     getTokensCajeros(restaurantId),
+    getSlug(restaurantId),
   ]);
-
   const tokens = [...new Set([...tokensMeseros, ...tokensCajeros])];
   if (tokens.length === 0) return;
 
@@ -115,6 +125,36 @@ export async function notificarCuentaSolicitada({
     tokens,
     title: `💳 Cuenta solicitada — ${mesaNombre}`,
     body:  `Total: $${total}`,
-    data:  { tipo: "cuenta_solicitada", restaurantId },
+    data:  {
+      tipo:         "cuenta_solicitada",
+      restaurantId,
+      url:          `/${slug}/operativo/caja`,
+    },
+  });
+}
+
+// ── Notificar pedido nuevo a cocina ───────────────────────
+export async function notificarPedidoNuevo({
+  restaurantId, mesaNombre, cantidadItems,
+}: {
+  restaurantId:  string;
+  mesaNombre:    string;
+  cantidadItems: number;
+}) {
+  const [tokens, slug] = await Promise.all([
+    getTokensRestaurante(restaurantId),
+    getSlug(restaurantId),
+  ]);
+  if (tokens.length === 0) return;
+
+  await sendPushToMany({
+    tokens,
+    title: `🍳 Pedido nuevo — ${mesaNombre}`,
+    body:  `${cantidadItems} ítem${cantidadItems !== 1 ? "s" : ""} en cocina`,
+    data:  {
+      tipo:         "pedido_nuevo",
+      restaurantId,
+      url:          `/${slug}/operativo/kds`,
+    },
   });
 }

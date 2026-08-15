@@ -13,7 +13,21 @@ export const mesaEstadoEnum         = pgEnum("mesa_estado",         ["LIBRE", "O
 export const sesionEstadoEnum       = pgEnum("sesion_estado",       ["ACTIVA", "CERRADA"]);
 export const pedidoEstadoEnum       = pgEnum("pedido_estado",       ["BORRADOR", "ENVIADO", "EN_PROCESO", "LISTO", "ENTREGADO", "CANCELADO"]);
 export const itemEstadoEnum         = pgEnum("item_estado",         ["EN_COLA", "EN_PREPARACION", "LISTO", "ENTREGADO", "CANCELADO"]);
-export const promocionTipoEnum      = pgEnum("promocion_tipo",      ["CLIENTE", "EQUIPO", "AMBOS"]);
+export const promocionVisibilidadEnum = pgEnum("promocion_visibilidad", [
+  "CLIENTE", "EQUIPO", "AMBOS"
+]);
+export const promocionTipoEnum = pgEnum("promocion_tipo_detalle", [
+  "PORCENTAJE",            // % descuento en toda la cuenta
+  "PORCENTAJE_CATEGORIA",  // % descuento en categoría específica
+  "MONTO_FIJO",            // $X de descuento
+  "2X1",                   // paga 1 lleva 2
+  "3X2",                   // paga 2 lleva 3
+  "COMBO",                 // grupo de items a precio fijo
+  "HAPPY_HOUR",            // % en rango horario
+  "PRIMERA_VISITA",        // descuento cliente nuevo
+  "CUMPLEANOS",            // descuento mes cumpleaños
+]);
+
 export const rucTipoEnum            = pgEnum("ruc_tipo",            ["PRINCIPAL", "ARTESANAL"]);
 export const facturaEstadoEnum      = pgEnum("factura_estado",      ["PENDIENTE", "AUTORIZADA", "DEVUELTA", "ANULADA", "ERROR"]);
 export const identificacionTipoEnum = pgEnum("identificacion_tipo", ["RUC", "CEDULA", "PASAPORTE", "CONSUMIDOR_FINAL"]);
@@ -39,6 +53,7 @@ export const admins = pgTable("admins", {
   activo:        boolean("activo").default(true).notNull(),
   creadoEn:      timestamp("creado_en").defaultNow().notNull(),
   actualizadoEn: timestamp("actualizado_en").defaultNow().notNull(),
+  esSuperAdmin: boolean("es_super_admin").default(false).notNull(),
 }, (t) => ({
   emailIdx: uniqueIndex("admins_email_idx").on(t.email),
 }));
@@ -64,6 +79,7 @@ export const restaurants = pgTable("restaurants", {
   moneda:        text("moneda").default("USD"),
   notasMenu:     text("notas_menu"),
   notaCuenta:    text("nota_cuenta"),
+  facturaActiva:      boolean("factura_activa").default(false).notNull(),
 
   // Plan y operación
   plan:                planEnum("plan").default("BASICO").notNull(),
@@ -77,21 +93,24 @@ export const restaurants = pgTable("restaurants", {
   propinaAdicionalPermitida: boolean("propina_adicional_permitida").default(true).notNull(),
 
   // Facturación SRI — Plan PRO
-  // Se configura en /configuracion → Facturación
-  // Se valida contra Kipu antes de habilitar
-  rucPrincipal:         text("ruc_principal"),           // RUC del restaurante
-  razonSocial:          text("razon_social"),            // Razón social SRI
-  codEstablecimiento:   text("cod_establecimiento"),     // "001"
-  codPuntoEmision:      text("cod_punto_emision"),       // "001"
-  secuencialPrincipal:  integer("secuencial_principal").default(1), // Komand lo trackea localmente
-  ambiente:             text("ambiente").default("2"),   // "1" pruebas | "2" producción
-  kipuValidado:         boolean("kipu_validado").default(false).notNull(),
-  // RUC artesanal — Plan PRO, opcional
-  rucArtesanal:         text("ruc_artesanal"),
-  razonSocialArtesanal: text("razon_social_artesanal"),
+  // Facturación SRI — Plan PRO
+  codEstablecimiento:          text("cod_establecimiento"),
+  codPuntoEmision:             text("cod_punto_emision"),
+  kipuApiKey:                  text("kipu_api_key"),    
+  // RUC artesanal — opcional
   codEstablecimientoArtesanal: text("cod_establecimiento_artesanal"),
   codPuntoEmisionArtesanal:    text("cod_punto_emision_artesanal"),
-  secuencialArtesanal:  integer("secuencial_artesanal").default(1),
+  kipuApiKeyArtesanal:         text("kipu_api_key_artesanal"), 
+
+  stripeCustomerId:      text("stripe_customer_id"),
+  stripeSubscriptionId:  text("stripe_subscription_id"),
+  planStatus:            text("plan_status").default("trialing"), 
+  // trialing | active | past_due | canceled | paused
+  trialEndsAt:           timestamp("trial_ends_at"),
+  currentPeriodEndsAt:   timestamp("current_period_ends_at"),
+  trialExtendedBy:  text("trial_extended_by"),  
+  trialExtendedAt:  timestamp("trial_extended_at"),
+  trialNotes:       text("trial_notes"), 
 
   creadoEn:      timestamp("creado_en").defaultNow().notNull(),
   actualizadoEn: timestamp("actualizado_en").defaultNow().notNull(),
@@ -497,17 +516,50 @@ export const itemsFactura = pgTable("items_factura", {
 export const promociones = pgTable("promociones", {
   id:           text("id").primaryKey().$defaultFn(() => createId()),
   restaurantId: text("restaurant_id").notNull().references(() => restaurants.id, { onDelete: "cascade" }),
+
+  // Info básica
   titulo:       text("titulo").notNull(),
   descripcion:  text("descripcion"),
   emoji:        text("emoji").default("🎉"),
-  tipo:         promocionTipoEnum("tipo").default("AMBOS").notNull(),
-  activa:       boolean("activa").default(true).notNull(),
+  tipo:         promocionTipoEnum("tipo_detalle").notNull(),
+  
+  // Visibilidad
+  visibilidad:  promocionVisibilidadEnum("visibilidad").default("AMBOS").notNull(),
+
+  // Valor del descuento
+  porcentaje:   decimal("porcentaje",   { precision: 5, scale: 2 }), // para PORCENTAJE, HAPPY_HOUR
+  montoFijo:    decimal("monto_fijo",   { precision: 10, scale: 2 }), // para MONTO_FIJO
+  precioCombo:  decimal("precio_combo", { precision: 10, scale: 2 }), // para COMBO
+  montoMinimo:  decimal("monto_minimo", { precision: 10, scale: 2 }), // monto mínimo para aplicar
+
+  // Targets
+  categoriaId:  text("categoria_id").references(() => categorias.id, { onDelete: "set null" }), // para PORCENTAJE_CATEGORIA
+  menuItemId:   text("menu_item_id").references(() => menuItems.id, { onDelete: "set null" }),   // para 2X1, 3X2
+
+  // Items del combo (array de menuItemIds)
+  comboItems:   jsonb("combo_items").$type<string[]>().default([]), // para COMBO
+
+  // Tiempo
   fechaInicio:  timestamp("fecha_inicio"),
   fechaFin:     timestamp("fecha_fin"),
+  horaInicio:   text("hora_inicio"), // "14:00"
+  horaFin:      text("hora_fin"),    // "15:00"
+  diasSemana:   jsonb("dias_semana").$type<number[]>().default([]), // [1,2,3,4,5] lun-vie, 0=dom
+
+  activa:       boolean("activa").default(true).notNull(),
   creadoEn:     timestamp("creado_en").defaultNow().notNull(),
   actualizadoEn: timestamp("actualizado_en").defaultNow().notNull(),
 }, (t) => ({
   restaurantIdx: index("promociones_restaurant_idx").on(t.restaurantId),
+}));
+
+export const comboItems = pgTable("combo_items", {
+  id:          text("id").primaryKey().$defaultFn(() => createId()),
+  promocionId: text("promocion_id").notNull().references(() => promociones.id, { onDelete: "cascade" }),
+  menuItemId:  text("menu_item_id").notNull().references(() => menuItems.id, { onDelete: "cascade" }),
+  cantidad:    integer("cantidad").default(1).notNull(),
+}, (t) => ({
+  promocionIdx: index("combo_items_promocion_idx").on(t.promocionId),
 }));
 
 // ═══════════════════════════════════════════════════════════
@@ -526,6 +578,22 @@ export const pushTokens = pgTable("push_tokens", {
   restaurantIdx: index("push_tokens_restaurant_idx").on(t.restaurantId),
   tokenIdx:      uniqueIndex("push_tokens_token_idx").on(t.token),
 }));
+
+
+export const reseñas = pgTable("resenas", {
+  id:           text("id").primaryKey().$defaultFn(() => createId()),
+  restaurantId: text("restaurant_id").notNull().references(() => restaurants.id, { onDelete: "cascade" }),
+  sesionId:     text("sesion_id").notNull().references(() => sesiones.id, { onDelete: "cascade" }),
+  calificacion: integer("calificacion").notNull(), // 1-5
+  comentario:   text("comentario"),
+  nombreCliente: text("nombre_cliente"), // opcional
+  creadoEn:     timestamp("creado_en").defaultNow().notNull(),
+}, (t) => ({
+  restaurantIdx: index("resenas_restaurant_idx").on(t.restaurantId),
+  sesionIdx:     uniqueIndex("resenas_sesion_idx").on(t.sesionId), // una reseña por sesión
+}));
+
+
 
 // ═══════════════════════════════════════════════════════════
 // RELATIONS
@@ -661,13 +729,29 @@ export const facturasRelations = relations(facturas, ({ one, many }) => ({
   items:      many(itemsFactura),
 }));
 
+
+export const reseñasRelations = relations(reseñas, ({ one }) => ({
+  restaurant: one(restaurants, { fields: [reseñas.restaurantId], references: [restaurants.id] }),
+  sesion:     one(sesiones,    { fields: [reseñas.sesionId],     references: [sesiones.id] }),
+}));
+
+
+
 export const itemsFacturaRelations = relations(itemsFactura, ({ one }) => ({
   factura:  one(facturas,  { fields: [itemsFactura.facturaId],  references: [facturas.id] }),
   menuItem: one(menuItems, { fields: [itemsFactura.menuItemId], references: [menuItems.id] }),
 }));
 
-export const promocionesRelations = relations(promociones, ({ one }) => ({
+export const comboItemsRelations = relations(comboItems, ({ one }) => ({
+  promocion: one(promociones, { fields: [comboItems.promocionId], references: [promociones.id] }),
+  menuItem:  one(menuItems,   { fields: [comboItems.menuItemId],  references: [menuItems.id] }),
+}));
+
+export const promocionesRelations = relations(promociones, ({ one, many }) => ({
   restaurant: one(restaurants, { fields: [promociones.restaurantId], references: [restaurants.id] }),
+  categoria:  one(categorias,  { fields: [promociones.categoriaId],  references: [categorias.id] }),
+  menuItem:   one(menuItems,   { fields: [promociones.menuItemId],   references: [menuItems.id] }),
+  itemsCombo: many(comboItems),
 }));
 
 export const pushTokensRelations = relations(pushTokens, ({ one }) => ({
@@ -715,6 +799,11 @@ export type NewFactura        = typeof facturas.$inferInsert;
 export type ItemFactura       = typeof itemsFactura.$inferSelect;
 export type Promocion         = typeof promociones.$inferSelect;
 export type PushToken         = typeof pushTokens.$inferSelect;
+export type ComboItem    = typeof comboItems.$inferSelect;
+export type NewComboItem = typeof comboItems.$inferInsert;
+export type NewPromocion = typeof promociones.$inferInsert;
+export type Resena    = typeof reseñas.$inferSelect;
+export type NewResena = typeof reseñas.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════
 // PLANTILLAS DE PERMISOS

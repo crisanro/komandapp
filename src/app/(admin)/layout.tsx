@@ -1,3 +1,4 @@
+//src/app/(admin)/layout.tsx
 import { getAdminSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/admin/Sidebar";
@@ -8,10 +9,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "var(--background)" }}>
-      <Sidebar nombre={session.nombre} />
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
+      <Sidebar nombre={session.nombre} slug={session.restaurantSlug} />
+      <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );
 }

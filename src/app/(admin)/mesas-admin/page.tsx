@@ -11,7 +11,14 @@ export default async function MesasAdminPage() {
   const mesasData = await db.query.mesas.findMany({
     where: eq(mesas.restaurantId, session.restaurantId),
     with: {
-      sesiones: { where: eq(sesiones.estado, "ACTIVA") },
+      sesiones: {
+        where: eq(sesiones.estado, "ACTIVA"),
+        with: {
+          pedidos: {
+            with: { items: true },
+          },
+        },
+      },
     },
     orderBy: [mesas.orden],
   });

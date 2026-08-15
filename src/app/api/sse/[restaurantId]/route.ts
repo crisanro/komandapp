@@ -1,3 +1,4 @@
+//src/app/api/sse/[restaurantId]/route.ts
 import { NextRequest } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import { addClient, removeClient, sendPing } from "@/lib/sse";

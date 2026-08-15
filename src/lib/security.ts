@@ -32,11 +32,13 @@ export const limiterRegistro = new RateLimiterRedis({
 });
 
 // ─── HELPER: consumir un punto ────────────────────────────
-
 export async function consumirLimite(
   limiter: RateLimiterRedis,
   ip: string
 ): Promise<{ bloqueado: boolean; error?: string }> {
+  // En desarrollo no aplicar rate limiting
+  if (process.env.NODE_ENV !== "production") return { bloqueado: false };
+
   try {
     await limiter.consume(ip);
     return { bloqueado: false };

@@ -5,17 +5,17 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title:       "Mesa — Gestión de restaurantes",
+  title:       "Komand — Gestión de restaurantes",
   description: "Plataforma operativa para restaurantes",
   manifest:    "/manifest.json",
   appleWebApp: {
-    capable:    true,
-    statusBarStyle: "black-translucent",
-    title:      "Mesa",
+    capable:         true,
+    statusBarStyle:  "black-translucent",
+    title:           "Komand",  // ← cambiar
   },
   icons: {
-    icon:  [
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32",   type: "image/png" },
       { url: "/icon-192.png",   sizes: "192x192", type: "image/png" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],

@@ -7,7 +7,8 @@ import {
 } from "@/db/schema";
 import {
   hashPassword, verifyPassword, hashCodigo, verifyCodigo, generarCodigo,
-  setSession, clearSession, getSession, getAdminSession, getVistaInicial,
+  setSession, clearSession, getSession, getAdminSession, getOperativoSession, // ← agregar
+  getVistaInicial, PERMISOS_ADMIN,
 } from "@/lib/auth";
 import {
   limiterLoginAdmin, limiterLoginOperativo, limiterRegistro,
@@ -56,10 +57,12 @@ export async function registrarRestaurante(formData: FormData) {
     await tx.insert(admins).values({ id: adminId, nombre, email, passwordHash });
     await tx.insert(restaurants).values({
       id: restaurantId, adminId, nombre, slug, ciudad: ciudad || null,
+      planStatus:  "trialing",
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 días
     });
   });
 
-  await setSession({ tipo: "admin", adminId, restaurantId, nombre, email });
+  await setSession({ tipo: "admin", adminId, restaurantId, restaurantSlug: slug, nombre, email });
   redirect("/dashboard");
 }
 
@@ -98,6 +101,7 @@ export async function loginAdmin(formData: FormData) {
     tipo: "admin",
     adminId: admin.id,
     restaurantId: restaurant.id,
+    restaurantSlug: restaurant.slug,
     nombre: admin.nombre,
     email: admin.email,
   });
@@ -181,22 +185,24 @@ export async function loginOperativo(formData: FormData) {
     tipo: "operativo",
     userId: user.id,
     restaurantId: restaurant.id,
+    restaurantSlug: restaurant.slug,
     nombre: user.nombre,
     vistaActiva,
     permisos,
     estaciones: estacionIds,
   });
 
-  redirect("/inicio");
+  redirect(`/${restaurant.slug}/operativo`);
 }
 
 // ─── CAMBIAR VISTA ───────────────────────────────────────
 
-export async function cambiarVista(vista: "mesas" | "kds" | "caja") {
+export async function cambiarVista(vista: "mesas" | "kds" | "caja"): Promise<void> {
   const session = await getSession();
-  if (!session || session.tipo !== "operativo") return { error: "No autorizado" };
+  if (!session || session.tipo !== "operativo") return; // ← sin return { error }
+
   await setSession({ ...session, vistaActiva: vista });
-  redirect(`/${vista}`);
+  redirect(`/${session.restaurantSlug}/operativo/${vista}`);
 }
 
 // ─── CREAR USUARIO OPERATIVO ─────────────────────────────
@@ -355,9 +361,46 @@ export async function eliminarAcceso(userId: string) {
   return { ok: true };
 }
 
+export async function entrarModoOperativo(): Promise<void> {
+  const session = await getAdminSession();
+  if (!session) return; // ← sin return { error }
+
+  await setSession({
+    tipo:           "operativo",
+    userId:         session.adminId,
+    restaurantId:   session.restaurantId,
+    restaurantSlug: session.restaurantSlug,
+    nombre:         session.nombre,
+    vistaActiva:    "mesas",
+    permisos:       PERMISOS_ADMIN,
+    estaciones:     [],
+    esAdmin:        true,
+    adminEmail:     session.email,
+  });
+
+  redirect(`/${session.restaurantSlug}/operativo`);
+}
+
+export async function volverAlPanel() {
+  const session = await getOperativoSession();
+  if (!session || !session.esAdmin) return;  // ← sin return { error }
+
+  await setSession({
+    tipo:           "admin",
+    adminId:        session.userId,
+    restaurantId:   session.restaurantId,
+    restaurantSlug: session.restaurantSlug,
+    nombre:         session.nombre,
+    email:          session.adminEmail ?? "",
+  });
+
+  redirect("/dashboard");
+}
+
+
 // ─── LOGOUT ──────────────────────────────────────────────
 
 export async function logout() {
   await clearSession();
-  redirect("/login");
+  redirect("/login");  // ← antes era /login
 }

@@ -20,16 +20,22 @@ export async function sendPushNotification({
       notification: { title, body },
       data,
       webpush: {
-        notification: { icon: "/icon-192.png", badge: "/badge-72.png", vibrate: [200, 100, 200] },
-        fcmOptions: { link: "/" },
+        notification: {
+          icon:    "/icon-192.png",
+          badge:   "/badge-72.png",
+          vibrate: [200, 100, 200],
+        },
+        fcmOptions: {
+          link: data?.url ?? "/",  // ← usar la URL del data
+        },
       },
     });
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;
     if (code === "messaging/registration-token-not-registered") {
-      console.log("[FCM] Token inválido:", token.slice(0, 20));
+      console.log("[FCM] Token inválido, ignorando:", token.slice(0, 20));
     } else {
-      console.error("[FCM] Error:", err);
+      console.error("[FCM] Error enviando push:", err);
     }
   }
 }

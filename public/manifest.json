@@ -1,8 +1,9 @@
 {
-  "name": "Mesa — Gestión de restaurantes",
-  "short_name": "Mesa",
+  "name": "Komand — Gestión de restaurantes",
+  "short_name": "Komand",
   "description": "Plataforma operativa para restaurantes",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#030712",
   "theme_color": "#E85D04",
@@ -12,15 +13,26 @@
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
-  "screenshots": [],
   "categories": ["food", "business", "productivity"]
 }
