@@ -17,17 +17,17 @@ export default async function MenuAdminPage() {
       orderBy: [categorias.orden],
     }),
     db.query.estaciones.findMany({
-      where:   eq(estaciones.restaurantId, session.restaurantId),
+      where: eq(estaciones.restaurantId, session.restaurantId),
       orderBy: [estaciones.orden],
     }),
     db.query.restaurants.findFirst({
-      where:   eq(restaurants.id, session.restaurantId),
-      columns: { ivaPorcentaje: true, rucArtesanal: true },
+      where: eq(restaurants.id, session.restaurantId),
+      columns: { ivaPorcentaje: true, kipuApiKeyArtesanal: true },
     }),
   ]);
 
-  // multiRuc = tiene RUC artesanal configurado (no depende del plan)
-  const multiRuc   = !!restaurant?.rucArtesanal;
+  // multiRuc = tiene API key artesanal de KIPU configurada (no depende del plan)
+  const multiRuc = !!restaurant?.kipuApiKeyArtesanal;
   const ivaVigente = parseFloat(restaurant?.ivaPorcentaje ?? "15");
 
   return (
