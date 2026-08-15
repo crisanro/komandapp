@@ -9,7 +9,13 @@ import BannerPromociones from "@/components/shared/BannerPromociones";
 import type { PermisosUser } from "@/lib/auth";
 
 type Promo  = { id: string; titulo: string; descripcion: string | null; emoji: string | null };
-type Item   = { id: string; estado: string; menuItem?: { nombre: string } | null };
+type Item   = { 
+  id: string; 
+  estado: string; 
+  cantidad: number;
+  precioUnitario?: string; // ← Agregado
+  menuItem?: { nombre: string } | null; 
+};
 type Pedido = { id: string; estado: string; items: Item[] };
 type Sesion = { id: string; token: string; estado: string; pedidos: Pedido[] };
 type Mesa   = {
@@ -17,11 +23,11 @@ type Mesa   = {
   capacidad: number | null; estado: string; sesiones: Sesion[];
 };
 type Pendiente = {
-  tipo:        "listo" | "cuenta" | "preparacion";
-  mesaId:      string;
-  mesaNombre:  string;
+  tipo:         "listo" | "cuenta" | "preparacion";
+  mesaId:       string;
+  mesaNombre:   string;
   sesionToken: string;
-  detalle:     string;
+  detalle:      string;
 };
 
 export default function MesasOperativoClient({
@@ -39,9 +45,10 @@ export default function MesasOperativoClient({
   estaciones:     string[];
   promos:         Promo[];
 }) {
-  const [mesas,   setMesas]   = useState<Mesa[]>(mesasIniciales);
+  const [mesas,    setMesas]   = useState<Mesa[]>(mesasIniciales);
   const [abriendo, setAbriendo] = useState<string | null>(null);
   const [cuentasSolicitadas, setCuentas] = useState<Set<string>>(new Set());
+  const [mesaModal, setMesaModal] = useState<Mesa | null>(null); // ← Estado del modal
   const router = useRouter();
 
   // ── SSE handlers ──────────────────────────────────────
@@ -63,7 +70,7 @@ export default function MesasOperativoClient({
   }, []);
 
   const handleItemUpdate = useCallback((data: unknown) => {
-    const { mesaId, sesionId, pedidoId, itemId, estado, nombreItem } = data as {
+    const { mesaId, sesionId, pedidoId, itemId, estado } = data as {
       mesaId: string; sesionId: string; pedidoId: string;
       itemId: string; estado: string; nombreItem?: string;
     };
@@ -90,7 +97,7 @@ export default function MesasOperativoClient({
   const handlePedidoNuevo = useCallback((data: unknown) => {
     const { mesaId, sesionId, pedidoId, items } = data as {
       mesaId: string; sesionId: string; pedidoId: string;
-      items: { id: string; estado: string; menuItem?: { nombre: string } }[];
+      items: { id: string; estado: string; cantidad: number; precioUnitario?: string; menuItem?: { nombre: string } }[];
     };
     setMesas(prev => prev.map(m =>
       m.id !== mesaId ? m : {
@@ -121,11 +128,11 @@ export default function MesasOperativoClient({
   }, []);
 
   useSSE(restaurantId, {
-    "mesa:update":       handleMesaUpdate,
-    "item:update":       handleItemUpdate,
-    "pedido:nuevo":      handlePedidoNuevo,
+    "mesa:update":        handleMesaUpdate,
+    "item:update":        handleItemUpdate,
+    "pedido:nuevo":       handlePedidoNuevo,
     "cuenta:solicitada": handleCuentaSolicitada,
-    "sesion:cerrada":    handleSesionCerrada,
+    "sesion:cerrada":     handleSesionCerrada,
   });
 
   // ── Pendientes ─────────────────────────────────────────
@@ -188,10 +195,10 @@ export default function MesasOperativoClient({
     const ocupada     = mesa.sesiones.length > 0;
     const tieneListos = mesa.sesiones.some(s => s.pedidos.some(p => p.items.some(i => i.estado === "LISTO")));
     const tieneCuenta = mesa.sesiones.some(s => cuentasSolicitadas.has(s.id));
-    if (!ocupada)    return { borderColor: "var(--border)",        dotColor: "var(--border)",        label: "Libre",     dotPulse: false };
+    if (!ocupada)    return { borderColor: "var(--border)",        dotColor: "var(--border)",        label: "Libre",      dotPulse: false };
     if (tieneCuenta) return { borderColor: "var(--color-info)",    dotColor: "var(--color-info)",    label: "💳 Cuenta", dotPulse: true  };
     if (tieneListos) return { borderColor: "var(--color-warning)", dotColor: "var(--color-warning)", label: "🔔 Listo",  dotPulse: true  };
-    return             { borderColor: "var(--accent)",             dotColor: "var(--accent)",        label: `${mesa.sesiones.length} cuenta${mesa.sesiones.length > 1 ? "s" : ""}`, dotPulse: false };
+    return                 { borderColor: "var(--accent)",             dotColor: "var(--accent)",        label: `${mesa.sesiones.length} cuenta${mesa.sesiones.length > 1 ? "s" : ""}`, dotPulse: false };
   }
 
   const pendientes = getPendientes();
@@ -288,12 +295,11 @@ export default function MesasOperativoClient({
                 return (
                   <button key={mesa.id}
                     onClick={() => {
-                      if (ocupada && mesa.sesiones.length === 1) {
-                        router.push(`/${restaurantSlug}/operativo/mesa/${mesa.sesiones[0].token}`);
-                      } else if (!ocupada) {
+                      if (ocupada) {
+                        setMesaModal(mesa); // ← Abre el modal con las cuentas de la mesa
+                      } else {
                         handleAbrirMesa(mesa.id);
                       }
-                      // Si tiene múltiples sesiones no hacemos nada — el mesero elige desde pendientes
                     }}
                     disabled={cargando}
                     className="mesa-card relative"
@@ -327,6 +333,93 @@ export default function MesasOperativoClient({
           )}
         </section>
       </main>
+
+      {/* Modal mesa ocupada */}
+      {mesaModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={() => setMesaModal(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-t-3xl p-6 pb-10 space-y-4"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-lg" style={{ color: "var(--text-primary)" }}>
+                  {mesaModal.nombre}
+                </h3>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {mesaModal.sesiones.length} cuenta{mesaModal.sesiones.length !== 1 ? "s" : ""} activa{mesaModal.sesiones.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <button onClick={() => setMesaModal(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ background: "var(--surface-raised)", color: "var(--text-muted)" }}>
+                ✕
+              </button>
+            </div>
+
+            {/* Cuentas activas */}
+            <div className="space-y-2">
+              {mesaModal.sesiones.map((sesion, idx) => {
+                const total = sesion.pedidos.reduce((acc, p) =>
+                  acc + p.items.reduce((a, i) => a + parseFloat(i.precioUnitario ?? "0") * i.cantidad, 0), 0
+                );
+                const itemsListos = sesion.pedidos.flatMap(p => p.items).filter(i => i.estado === "LISTO").length;
+                const pideCuenta  = cuentasSolicitadas.has(sesion.id);
+
+                return (
+                  <button key={sesion.id}
+                    onClick={() => {
+                      router.push(`/${restaurantSlug}/operativo/mesa/${sesion.token}`);
+                      setMesaModal(null);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                    style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm text-white"
+                      style={{ background: "var(--accent)" }}>
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        Cuenta {idx + 1}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {sesion.pedidos.length} pedido{sesion.pedidos.length !== 1 ? "s" : ""}
+                        {itemsListos > 0 && ` · 🔔 ${itemsListos} listo${itemsListos !== 1 ? "s" : ""}`}
+                        {pideCuenta && " · 💳 Pide cuenta"}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold" style={{ color: "var(--accent)" }}>
+                        ${total.toFixed(2)}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>→</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Abrir cuenta nueva */}
+            {(permisos?.puedeAbrirMesas || esAdmin) && (
+              <button
+                onClick={async () => {
+                  const mesaId = mesaModal.id;
+                  setMesaModal(null);
+                  await handleAbrirMesa(mesaId);
+                }}
+                className="btn btn-primary w-full">
+                + Abrir cuenta nueva en {mesaModal.nombre}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

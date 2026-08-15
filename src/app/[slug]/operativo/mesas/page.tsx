@@ -34,7 +34,22 @@ export default async function MesasOperativoPage({
       with: {
         sesiones: {
           where: eq(sesiones.estado, "ACTIVA"),
-          with: { pedidos: { with: { items: true } } },
+          with: {
+            pedidos: {
+              with: {
+                items: {
+                  columns: {
+                    id:             true,
+                    estado:         true,
+                    cantidad:       true,
+                    precioUnitario: true, // ← agregar
+                    estacionId:     true,
+                  },
+                  with: { menuItem: { columns: { nombre: true } } },
+                },
+              },
+            },
+          },
         },
       },
       orderBy: [mesas.orden],
