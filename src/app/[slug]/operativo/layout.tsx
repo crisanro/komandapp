@@ -3,7 +3,21 @@ import { redirect } from "next/navigation";
 import { volverAlPanel } from "@/actions/auth";
 import PushInit from "@/components/operativo/PushInit";
 import BottomNav from "@/components/operativo/BottomNav";
+import { Metadata } from "next";
 
+// 1. Exportamos generateMetadata para inyectar el manifest dinámico
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  return {
+    manifest: `/${slug}/operativo/manifest.webmanifest`,
+  };
+}
+
+// 2. Tu Layout original
 export default async function OperativoLayout({
   children,
   params,

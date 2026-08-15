@@ -11,9 +11,14 @@ function esPublica(pathname: string): boolean {
   if (PUBLIC_EXACTAS.includes(pathname)) return true;
 
   const partes = pathname.split("/").filter(Boolean);
-  if (partes.length >= 2) {
-    const seccion = partes[1];
-    if (seccion === "menu" || seccion === "login") return true;
+  if (partes.length >= 1) {
+    const seccion = partes[1]; // segundo segmento
+    // /[slug]/login → login operativos
+    // /[slug]/menu  → carta pública (si aún existe)
+    if (seccion === "login" || seccion === "menu") return true;
+    
+    // /[slug] solo — carta pública directa ← agregar esto
+    if (partes.length === 1) return true;
   }
 
   if (pathname.startsWith("/api/auth/")) return true;
