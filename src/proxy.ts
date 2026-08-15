@@ -11,14 +11,16 @@ function esPublica(pathname: string): boolean {
   if (PUBLIC_EXACTAS.includes(pathname)) return true;
 
   const partes = pathname.split("/").filter(Boolean);
+  
   if (partes.length >= 1) {
-    const seccion = partes[1]; // segundo segmento
-    // /[slug]/login → login operativos
-    // /[slug]/menu  → carta pública (si aún existe)
-    if (seccion === "login" || seccion === "menu") return true;
-    
-    // /[slug] solo — carta pública directa ← agregar esto
+    // /[slug] — carta pública
     if (partes.length === 1) return true;
+    
+    const seccion = partes[1];
+    // /[slug]/login → login operativos
+    if (seccion === "login") return true;
+    // /[slug]/mesa/[token] → carta interactiva del cliente ← agregar
+    if (seccion === "mesa") return true;
   }
 
   if (pathname.startsWith("/api/auth/")) return true;
@@ -27,7 +29,6 @@ function esPublica(pathname: string): boolean {
 
   return false;
 }
-
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
