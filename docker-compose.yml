@@ -15,6 +15,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.mesa-sse.headers.customResponseHeaders.X-Accel-Buffering=no"
+      - "traefik.http.middlewares.mesa-sse.headers.customResponseHeaders.Cache-Control=no-cache,no-transform"
+      - "traefik.http.middlewares.mesa-sse.headers.customResponseHeaders.Connection=keep-alive"
+      - "traefik.http.routers.mesa.middlewares=mesa-sse"
     networks:
       - red_infraestructura
 

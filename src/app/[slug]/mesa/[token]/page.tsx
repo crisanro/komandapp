@@ -1,3 +1,4 @@
+//src/app/[slug]/operativo/mesa/[token]/page.tsx
 import { db } from "@/db";
 import { sesiones, categorias, programasFidelidad } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -8,6 +9,8 @@ type Props = { params: Promise<{ slug: string; token: string }> };
 
 export default async function ClienteMenuPage({ params }: Props) {
   const { token } = await params;
+  
+  console.log("Token buscado:", token);
 
   const sesion = await db.query.sesiones.findFirst({
     where: and(eq(sesiones.token, token), eq(sesiones.estado, "ACTIVA")),
@@ -15,13 +18,8 @@ export default async function ClienteMenuPage({ params }: Props) {
       mesa: true,
       restaurant: {
         columns: {
-          id: true,
-          nombre: true,
-          color: true,
-          logoUrl: true,
-          notasMenu: true,
-          facturaActiva: true,
-          plan: true,
+          id: true, nombre: true, color: true, logoUrl: true,
+          notasMenu: true, facturaActiva: true, plan: true,
         },
       },
       pedidos: {
@@ -30,6 +28,8 @@ export default async function ClienteMenuPage({ params }: Props) {
       },
     },
   });
+
+  console.log("Sesion encontrada:", sesion?.id ?? "NO ENCONTRADA"); // ← agregar
 
   if (!sesion) return notFound();
 
