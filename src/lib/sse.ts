@@ -6,16 +6,17 @@ type SSEClient = {
   controller:   ReadableStreamDefaultController;
 };
 
-// Clientes locales de esta instancia
 const clients = new Map<string, Set<SSEClient>>();
 
-// Subscriber dedicado — no puede usarse para otros comandos
-const subscriber = new Redis(process.env.REDIS_URL!);
+// Subscriber dedicado — conexión separada del cliente principal
+const subscriber = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379");
 
 subscriber.on("message", (channel: string, message: string) => {
   const restaurantId = channel.replace("sse:", "");
   const restaurantClients = clients.get(restaurantId);
   if (!restaurantClients || restaurantClients.size === 0) return;
+
+  console.log(`[SSE] Redis → ${restaurantId}, clientes: ${restaurantClients.size}`);
 
   const encoder = new TextEncoder();
   for (const client of restaurantClients) {
@@ -27,14 +28,19 @@ subscriber.on("message", (channel: string, message: string) => {
   }
 });
 
+subscriber.on("error", (err) => {
+  console.error("[SSE] Redis subscriber error:", err.message);
+});
+
 export function addClient(restaurantId: string, controller: ReadableStreamDefaultController) {
   if (!clients.has(restaurantId)) {
     clients.set(restaurantId, new Set());
-    // Suscribirse al canal de Redis para este restaurante
     subscriber.subscribe(`sse:${restaurantId}`);
+    console.log(`[SSE] Suscrito a canal: sse:${restaurantId}`);
   }
   const client: SSEClient = { restaurantId, controller };
   clients.get(restaurantId)!.add(client);
+  console.log(`[SSE] Cliente agregado: ${restaurantId}, total: ${clients.get(restaurantId)!.size}`);
   return client;
 }
 
@@ -42,29 +48,18 @@ export function removeClient(client: SSEClient) {
   const set = clients.get(client.restaurantId);
   if (set) {
     set.delete(client);
-    // Si no quedan clientes, desuscribirse
     if (set.size === 0) {
       subscriber.unsubscribe(`sse:${client.restaurantId}`);
       clients.delete(client.restaurantId);
+      console.log(`[SSE] Desuscrito de: sse:${client.restaurantId}`);
     }
   }
 }
 
 export function broadcast(restaurantId: string, event: string, data: unknown) {
-  const restaurantClients = clients.get(restaurantId);
-  console.log(`[SSE] broadcast ${event} → restaurantId: ${restaurantId}, clientes: ${restaurantClients?.size ?? 0}`);
-  
-  if (!restaurantClients || restaurantClients.size === 0) return;
-  
   const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  const encoder = new TextEncoder();
-  for (const client of restaurantClients) {
-    try {
-      client.controller.enqueue(encoder.encode(message));
-    } catch {
-      restaurantClients.delete(client);
-    }
-  }
+  console.log(`[SSE] broadcast → sse:${restaurantId} | ${event}`);
+  redis.publish(`sse:${restaurantId}`, message);
 }
 
 export function sendPing(controller: ReadableStreamDefaultController) {
